@@ -16,6 +16,7 @@ An asynchronous proxy to proxy HTTP traffic through [AWS API Gateway](https://aw
 
 - [DOUBLETAP](#doubletap)
   * [What is this?](#what-is-this)
+  * [DOUBLETAP vs Other IP Rotation Approaches](#doubletap-vs-other-ip-rotation-approaches)
   * [How does it work?](#how-does-it-work)
   * [Limitations](#limitations)
   * [Use Cases](#use-cases)
@@ -42,6 +43,24 @@ Essentially, it's a fully weaponized version of the underlying concept which too
 - Works just like a regular proxy
 - Dynamically creates, stages and deploys [AWS API Gateway](https://aws.amazon.com/api-gateway/) endpoints for each new domain across multiple AWS regions concurrently and transparently redirects traffic.
 
+## DOUBLETAP vs Other IP Rotation Approaches
+
+When it comes to rotating IPs, there are obviously a lot of ways of doing the same thing. This approach offers major benefits over the traditional methods there are obviously also some cons.
+
+### Pros
+
+- Much easier to setup and use (you literally just need an AWS account, that's it).
+- Cost-wise it's pretty much free unless you go above 1 million requests a month. See the [AWS API Gateway pricing page](https://aws.amazon.com/api-gateway/pricing/) for details.
+- You have a much greater "pool of IPs" compared to the other approaches. The "pool" is even bigger when using multiple AWS regions (which DOUBLETAP does).
+- Connection speeds are extremely fast as the "proxying" is just an HTTP request to an AWS endpoint. There is basically no network overhead compared to other approaches.
+- You're "proxying" through a highly reputable and trusted (trust is obviously subjective) entity as supposed to a random service on the internet that may or may not be maliciously modifying/intercepting your traffic.
+- The IPs that the end service sees are in the AWS network range which are generally trusted.
+
+### Cons
+
+- You can only proxy HTTP, HTTP/2 and Websocket traffic
+
+
 ## How Does it Work?
 
 [mitmproxy](https://mitmproxy.org/) exposes an [addon](https://docs.mitmproxy.org/stable/addons-overview/) system which allows you to create components of any complexity that interact with it's proxy engine.
@@ -52,12 +71,12 @@ The real "magic" comes into play when you send an HTTP request through the proxy
 
 1. Constructs the root URL from the URL you requested
 2. Checks an internal dictionary structure to see if it already setup an API Gateway endpoint that proxies traffic to that domain
-3. If not, it'll concurrently create, stage and deploy a new API Geteway endpoint across multiple AWS regions ([10 by default](https://github.com/Porchetta-Industries/DOUBLETAP/blob/master/doubletap.py#L11)) to proxy traffic to the domain you requested (this makes the IP rotation rate is even higher).
+3. If not, it'll concurrently create, stage and deploy a new API Geteway endpoint across multiple AWS regions ([10 by default](https://github.com/Porchetta-Industries/DOUBLETAP/blob/master/doubletap.py#L11)) to proxy traffic to the domain you requested (this makes the IP rotation rate even higher).
 4. During the API Gateway endpoint creation, it'll remap the `X-Forwarded-For` header: this allows us to specify an IP of our choosing that the end server will see in that header.
 5. DOUBLETAP can detect when the API is fully staged (usually takes anywhere between 10-30 seconds) and will only allow the requests to proceed once the API endpoints are ready across all regions.
 6. It'll then pick at random an API Gateway endpoint URL from the ones it created
 7. Generate a fake IP for the `X-Forwarded-for` header and change the User Agent of the request
-8. Finally it'll seamlessly redirect the modified request to the chosen API Gateway endpoint URL
+8. Finally it'll seamlessly redirect the modified request to the chosen API Gateway endpoint URL which will then proxy the request to the actual target.
 
 The result is that the server you're hitting will see a truly unique IP on almost each request. Additionally it will not give away your real IP address through the `X-Forwarded-For` header as it's supplied a bogus IP.
 
@@ -76,11 +95,11 @@ To help alleviate this limitation, I'll be implementing "domain pre-loads" and "
 Additionally:
 
 - HTTP/2 requests are not supported. [mitmproxy](https://mitmproxy.org/) doesn't have the ability to redirect HTTP/2 connections (yet). However, AWS API Gateway does support HTTP/2 and Websocket connections so mitmproxy just needs to catch up.
-- Incredibly, if the end service you're trying access uses legitimately uses AWS API Gateway, the proxying won't work. It's like a cloud Judo move. Thankfully, not a lot of things use AWS API Gateway as I've only ran into this once in a year or so of using this.
+- Incredibly, if the end service you're trying access legitimately uses AWS API Gateway, the proxying won't work. It's like a cloud Judo move. Thankfully, not a lot of things use AWS API Gateway as I've only ran into this once in a year or so of using this tool.
 
 ## Use Cases
 
-1. The new SprayingToolkit update is built to support proxying everything through DOUBLETAP. No more IP blacklisting 😈
+1. The new SprayingToolkit update is built to support proxying everything through DOUBLETAP. No more IP blacklisting on password sprays 😈
 2. ENTROPICFORESIGHT is built to support proxying everything through DOUBLETAP. No more API keys and/or rate limiting when trying to scrape OSINT data 😈
 2. Scraping with Headless Browsers, this will work a lot better once I implement the "domain pre-loads" and the domain allow/deny lists.
 3. Anything that can benefit from a new IP on each request 😈 make the possibilities flow through you.
