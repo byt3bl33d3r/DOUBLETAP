@@ -19,10 +19,15 @@ An asynchronous proxy to proxy HTTP traffic through [AWS API Gateway](https://aw
   * [How does it work?](#how-does-it-work)
   * [Limitations](#limitations)
   * [Use Cases](#use-cases)
+  * [OPSEC Considerations, Detection & Defense](#opsec-considerations-detections-defense)
   * [Installation](#installation)
     + [Docker](#docker)
     + [Source](#source)
   * [Usage](#usage)
+    + [Starting the Proxy Using the Docker Image](#starting-the-proxy-using-the-docker-image)
+    + [Starting the Proxy Using mitmproxy](#starting-the-proxy-using-mitmproxy)
+    + [Sending Requests through the Proxy](#sending-requests-through-the-proxy)
+  * [To Do](#to-do)
 
 ## What is this?
 
@@ -69,7 +74,7 @@ To help alleviate this limitation, I'll be implementing "domain pre-loads" and "
 Additionally:
 
 - HTTP/2 requests are not supported. [mitmproxy](https://mitmproxy.org/) doesn't have the ability to redirect HTTP/2 connections (yet). However, AWS API Gateway does support HTTP/2 and Websocket connections so mitmproxy just needs to catch up.
-- Incredibly, if the end service you're trying access uses AWS API Gateway, the proxying won't work. It's like a cloud Judo move. Thankfully, not a lot of things use AWS API Gateway as I've only ran into this once in a year or so of using this.
+- Incredibly, if the end service you're trying access uses legitimately uses AWS API Gateway, the proxying won't work. It's like a cloud Judo move. Thankfully, not a lot of things use AWS API Gateway as I've only ran into this once in a year or so of using this.
 
 ## Use Cases
 
@@ -78,6 +83,25 @@ Additionally:
 2. Scraping with Headless Browsers, this will work a lot better once I implement the "domain pre-loads" and the domain allow/deny lists.
 3. Anything that can benefit from a new IP on each request 😈 make the possibilities flow through you.
 
+## OPSEC Considerations, Detection & Defense
+
+
+### Offensive OPSEC Considerations
+
+- The underlying technique can be detected by looking for the `x-amz-apigw-id` header which is sent on each request through AWS API Gateway. There is no way to avoid this. (See the [Defense & Detection](#defense-&-detection) section for more details)
+- While the IP on each request does change *most* of the time there is always a slight possibility it doesn't as this isn't a "legit" feature of AWS API Gateway. Either way, your real IP won't ever be revealed.
+
+### Defense & Detection
+
+While the IP address does change on each connection, there are some things that are "baked" into how AWS API Gateway works that can be used to detect this technique.
+
+**Note: all of the below is from my current understanding of how things work which is subject to change 😜. I'm by no means an AWS expert. Feel free to reach out if something is inaccurate.**
+
+The most effective way of identifying the *underlying technique* of this tool (this is a non-fragile detection) is to look for the `x-amz-apigw-id` header in HTTP requests. This header contains a Base64 encoded value which identifies the API Gateway being used and there isn't a way to overwrite it/remove it (unlike the `X-Forwarded-For` header). This can be used to identify the AWS account which has deployed the specific gateway, so you could give the header value to AWS in order to file an abuse complaint if needed.
+
+You probably shouldn't be receiving HTTP requests from AWS API Gateway anyway so I feel pretty confident in saying this is safe way of blocking/detecting this technique. Creating an IDS/IPS rule looking for that header should be pretty trivial.
+
+If you're using AWS API Gateway legitimately to host your service in the first place, you're implicitly safe from this technique as proxying to another service hosted on AWS API Gateway won't work! I call this a cloud Judo.
 
 ## Installation
 
@@ -96,18 +120,48 @@ pip3 install -r requirements.txt
 
 ## Usage
 
-DOUBLETAP obviously needs AWS credentials in order to interact with AWS API Gateway. By default it'll look for the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables containing the AWS access key and AWS secret key respectively. If it doesn't find those environment variables, it'll try to grab them from the `~/.aws/credentials` file which is setup when you install the [AWS CLI utility](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html).
+DOUBLETAP needs AWS credentials in order to interact with AWS API Gateway. By default it'll look for the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables containing the AWS access key and AWS secret key respectively. If it doesn't find those environment variables, it'll try to grab access and secret key from the `~/.aws/credentials` file which is setup when you install the [AWS CLI utility](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html).
 
 The proxy will bind on all interfaces on port `8080` by default.
 
-### Using the Docker Image
+### Starting the Proxy Using the Docker Image
 
 ```console
 docker run -p 8080:8080 -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY --rm -it $IMAGE_ID
 ```
 
-### Using the Addon Directly
+### Starting the Proxy Using mitmproxy
 
 ```console
 mitmdump -v --no-http2 -k -s doubletap.py
 ```
+
+### Sending Requests through the Proxy
+
+This really comes down to what you're trying to do/tool you're using. Generally, most tools have HTTP proxy support. You can also use ProxyChains to "force" something to use a proxy.
+
+Here's some commands I recommend trying to test the proxy is working and to get an idea how things work:
+
+**Note: please read the [limitations](#limitations) section. First time you request a URL/domain it can take up to 30 seconds to receive back a response. Depending on the tool, you might need to set a higher timeout threshold in order to accommodate this.**
+
+#### cURL:
+```console
+curl --insecure -x http://127.0.0.1:8080 -v https://ifconfig.me/all
+```
+
+#### HTTPie:
+```console
+http --verify no -v --proxy http://127.0.0.1:8080 https://ifconfig.me/all
+```
+
+If you run one of the above commands, you should see a new IP in the response on each request 🔥😈
+
+# To Do
+
+- Implement "domain/URL pre-loads"
+- Implement "domain/URL allow/deny" support with regexes
+- Allow customization of how DOUBLETAP chooses the API Gateway proxy URL (e.g. Round-Robin as supposed to at random)
+- Allow customization of User-Agent replacement.
+- Allow customization of how the bogus IP in the `X-Forwarded-For` header is generated
+- Expose a "cleanup" command to remove stages from API Gateway
+- Better logging
