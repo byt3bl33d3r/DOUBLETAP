@@ -1,10 +1,10 @@
 # DOUBLETAP
 
+An asynchronous proxy to proxy HTTP traffic through [AWS API Gateway](https://aws.amazon.com/api-gateway/) and rotate IP address on each request.
+
 <p align="center">
   <img src="https://media1.tenor.com/images/2ce301a35b13eea7b1e6d26a2ef98089/tenor.gif?itemid=12637269"/>
 </p>
-
-An asynchronous proxy to proxy HTTP traffic through [AWS API Gateway](https://aws.amazon.com/api-gateway/) and rotate IP address on each request.
 
 ## Sponsors
 [<img src="https://www.blackhillsinfosec.com/wp-content/uploads/2016/03/BHIS-logo-L-300x300.png" width="130" height="130"/>](https://www.blackhillsinfosec.com/)
@@ -19,7 +19,9 @@ An asynchronous proxy to proxy HTTP traffic through [AWS API Gateway](https://aw
   * [How does it work?](#how-does-it-work)
   * [Limitations](#limitations)
   * [Use Cases](#use-cases)
-  * [OPSEC Considerations, Detection & Defense](#opsec-considerations-detections-defense)
+  * [OPSEC Considerations, Detection & Defense](#opsec-considerations-detection--defense)
+    + [Offensive OPSEC Considerations](#offensive-opsec-considerations)
+    + [Defense & Detection](#defense--detection)
   * [Installation](#installation)
     + [Docker](#docker)
     + [Source](#source)
