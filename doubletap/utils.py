@@ -1,8 +1,11 @@
 import string
 import random
 import json
+import logging
 from faker import Faker
 from faker.providers import internet
+
+log = logging.getLogger("doubletap.utils")
 
 fake = Faker()
 fake.add_provider(internet)
@@ -10,7 +13,7 @@ fake.add_provider(internet)
 def gen_random_ip():
     return fake.ipv4_public()
 
-def beutify_json(obj):
+def beautify_json(obj):
     return "\n" + json.dumps(obj, sort_keys=True, indent=4, separators=(',', ': '))
 
 def gen_random_string(length=7, only_letters=False):
