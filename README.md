@@ -45,21 +45,29 @@ Essentially, it's a fully weaponized version of the underlying concept which too
 
 ## DOUBLETAP vs Other IP Rotation Approaches
 
-When it comes to rotating IPs, there are obviously a lot of ways of doing the same thing. This approach offers major benefits over the traditional methods there are obviously also some cons.
+When it comes to rotating IPs, there are a lot of ways of doing the same thing. This approach offers major benefits over the traditional methods but obviously there are also some cons.
 
 ### Pros
 
 - Much easier to setup and use (you literally just need an AWS account, that's it).
+
 - Cost-wise it's pretty much free unless you go above 1 million requests a month. See the [AWS API Gateway pricing page](https://aws.amazon.com/api-gateway/pricing/) for details.
+
 - You have a much greater "pool of IPs" compared to the other approaches. The "pool" is even bigger when using multiple AWS regions (which DOUBLETAP does).
+
 - Connection speeds are extremely fast as the "proxying" is just an HTTP request to an AWS endpoint. There is basically no network overhead compared to other approaches.
+
 - You're "proxying" through a highly reputable and trusted (trust is obviously subjective) entity as supposed to a random service on the internet that may or may not be maliciously modifying/intercepting your traffic.
+
 - The IPs that the end service sees are in the AWS network range which are generally trusted.
 
 ### Cons
 
-- You can only proxy HTTP, HTTP/2 and Websocket traffic
+- You can only proxy HTTP, HTTP/2 and Websocket traffic. Not arbitrary TCP. (Currently DOUBLETAP only supports HTTP due to some mitmproxy limitations).
 
+- Can be somewhat easily detected by looking for a specific header that cannot be removed (See the [Defense & Detection](#defense-&-detection) section for more details)
+
+- Does not work against other services hosted on AWS API Gateway.
 
 ## How Does it Work?
 
@@ -110,7 +118,8 @@ Additionally:
 ### Offensive OPSEC Considerations
 
 - The underlying technique can be detected by looking for the `x-amz-apigw-id` header which is sent on each request through AWS API Gateway. There is no way to avoid this. (See the [Defense & Detection](#defense-&-detection) section for more details)
-- While the IP on each request does change *most* of the time there is always a slight possibility it doesn't as this isn't a "legit" feature of AWS API Gateway. Either way, your real IP won't ever be revealed.
+- While the IP on each request does change *most* of the time there is always a slight possibility it doesn't as this isn't a "legit" or predictable feature of AWS API Gateway. Either way, your real IP won't ever be revealed.
+- By default, a random IP is generated and sent along in the `X-Forwarded-For` header using the Python [Faker](https://github.com/joke2k/faker) library.
 
 ### Defense & Detection
 
@@ -123,6 +132,8 @@ The most effective way of identifying the *underlying technique* of this tool (t
 You probably shouldn't be receiving HTTP requests from AWS API Gateway anyway so I feel pretty confident in saying this is safe way of blocking/detecting this technique. Creating an IDS/IPS rule looking for that header should be pretty trivial.
 
 If you're using AWS API Gateway legitimately to host your service in the first place, you're implicitly safe from this technique as proxying to another service hosted on AWS API Gateway won't work! I call this a cloud Judo.
+
+Finally, by default a fake IP is generated and sent along in the `X-Forwarded-For` header using the Python [Faker](https://github.com/joke2k/faker) library. You could check this IP to make sure it's valid and correlate it with WHOIS data. Or just take a look at the Faker library closer to see if there's a way of predicting the IPs it generates.
 
 ## Installation
 
