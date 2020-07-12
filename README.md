@@ -63,11 +63,13 @@ When it comes to rotating IPs, there are a lot of ways of doing the same thing. 
 
 ### Cons
 
-- You can only proxy HTTP, HTTP/2 and Websocket traffic. Not arbitrary TCP. (Currently DOUBLETAP only supports HTTP due to some mitmproxy limitations).
+- You can only proxy HTTP, HTTP/2 and Websocket traffic. Not arbitrary TCP (currently DOUBLETAP only supports HTTP due to some mitmproxy limitations)
 
-- Can be somewhat easily detected by looking for a specific header that cannot be removed (See the [Defense & Detection](#defense-&-detection) section for more details)
+- Can be somewhat easily detected by looking for a specific header that cannot be removed (see the [Defense & Detection](#defense-&-detection) section for more details)
 
-- Does not work against other services hosted on AWS API Gateway.
+- Does not work against other services hosted on AWS API Gateway
+
+- It can take up to ~30 seconds to receive back a response when issuing a request to a new domain/URL. Subsequent requests, to the same domain/URL won't have this limitation (see the [limitations](#limitations) section for more details)
 
 ## How Does it Work?
 
@@ -131,7 +133,7 @@ The most effective way of identifying the *underlying technique* of this tool (t
 
 You probably shouldn't be receiving HTTP requests from AWS API Gateway anyway so I feel pretty confident in saying this is safe way of blocking/detecting this technique. Creating an IDS/IPS rule looking for that header should be pretty trivial.
 
-If you're using AWS API Gateway legitimately to host your service in the first place, you're implicitly safe from this technique as proxying to another service hosted on AWS API Gateway won't work! I call this a cloud Judo.
+If you're using AWS API Gateway legitimately to host your service in the first place, you're implicitly safe from this technique as proxying to another service hosted on AWS API Gateway won't work! I call this Cloud Judo.
 
 Finally, by default a fake IP is generated and sent along in the `X-Forwarded-For` header using the Python [Faker](https://github.com/joke2k/faker) library. You could check this IP to make sure it's valid and correlate it with WHOIS data. Or just take a look at the Faker library closer to see if there's a way of predicting the IPs it generates.
 
