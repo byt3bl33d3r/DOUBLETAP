@@ -69,7 +69,7 @@ When it comes to rotating IPs, there are a lot of ways of doing the same thing. 
 
 - Does not work against other services hosted on AWS API Gateway
 
-- It can take up to ~30 seconds to receive back a response when issuing a request to a new domain/URL. Subsequent requests, to the same domain/URL won't have this limitation (see the [limitations](#limitations) section for more details)
+- It can take up to ~30 seconds to receive back a response when issuing a request to a new domain/URL. Subsequent requests to the same domain/URL will normal response times (see the [limitations](#limitations) section for more details)
 
 ## How Does it Work?
 
