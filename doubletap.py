@@ -11,10 +11,18 @@ from doubletap.aws import AWSProxies
 from doubletap.utils import USER_AGENTS, get_aws_credentials, gen_random_ip
 
 REGIONS = [
-	"us-east-1","us-west-1","us-east-2",
-	"us-west-2","eu-central-1","eu-west-1",
-	"eu-west-2","eu-west-3","sa-east-1","eu-north-1"
+    "us-east-1",
+    "us-west-1",
+    "us-east-2",
+    "us-west-2",
+    "eu-central-1",
+    "eu-west-1",
+    "eu-west-2",
+    "eu-west-3",
+    "sa-east-1",
+    "eu-north-1",
 ]
+
 
 class DoubleTap:
     def __init__(self):
@@ -22,17 +30,17 @@ class DoubleTap:
 
     def load(self, loader):
         loader.add_option(
-            name = "cleanup",
-            typespec = bool,
-            default = False,
-            help = "Delete all staged proxies before starting",
+            name="cleanup",
+            typespec=bool,
+            default=False,
+            help="Delete all staged proxies before starting",
         )
 
         loader.add_option(
-            name = "proxy_method",
-            typespec = str,
-            default = "random",
-            help = "Proxy method to use",
+            name="proxy_method",
+            typespec=str,
+            default="random",
+            help="Proxy method to use",
         )
 
     def configure(self, updates):
@@ -51,15 +59,21 @@ class DoubleTap:
         proxy_url = random.choice(proxy_urls)
         ctx.log.info(f"Redirecting request to {proxy_url}")
 
-        flow.request.url = proxy_url if flow.request.path == '/' else urljoin(proxy_url, flow.request.path[1:])
+        flow.request.url = (
+            proxy_url
+            if flow.request.path == "/"
+            else urljoin(proxy_url, flow.request.path[1:])
+        )
         flow.request.host = urlparse(proxy_url).netloc
-        flow.request.headers['User-Agent'] = random.choice(USER_AGENTS)
-        flow.request.headers['X-My-X-Forwarded-For'] = gen_random_ip()
+        flow.request.headers["User-Agent"] = random.choice(USER_AGENTS)
+        flow.request.headers["X-My-X-Forwarded-For"] = gen_random_ip()
 
         flow.resume()
 
     async def proxy_request(self, flow):
-        proxy_urls = await self.proxies.create(f"{flow.request.scheme}://{flow.request.host}/")
+        proxy_urls = await self.proxies.create(
+            f"{flow.request.scheme}://{flow.request.host}/"
+        )
         await self.redirect(flow, proxy_urls)
 
     def request(self, flow):
@@ -70,20 +84,19 @@ class DoubleTap:
     @concurrent
     def response(self, flow):
         remapped_headers = {}
-        for k,v in flow.response.headers.items():
+        for k, v in flow.response.headers.items():
             header = k
-            if k.lower().startswith('x-amzn-remapped'):
-                #header = '-'.join(map(lambda x: x.title(), k.split('-',3)[-1].split('-')))
-                header = k.split('-',3)[-1]
+            if k.lower().startswith("x-amzn-remapped"):
+                # header = '-'.join(map(lambda x: x.title(), k.split('-',3)[-1].split('-')))
+                header = k.split("-", 3)[-1]
 
             remapped_headers[header.encode()] = v.encode()
 
-        #ctx.log.debug(beautify_json(remapped_headers))
+        # ctx.log.debug(beautify_json(remapped_headers))
         flow.response.headers = Headers(remapped_headers.items())
 
     def done(self):
         ctx.log.info("DOUBLETAP exiting...")
 
-addons = [
-    DoubleTap()
-]
+
+addons = [DoubleTap()]
