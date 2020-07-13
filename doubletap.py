@@ -1,12 +1,14 @@
 import asyncio
 import random
 import logging
-from urllib.parse import urlparse, urljoin
+import sys
 from mitmproxy import ctx
 from mitmproxy.script import concurrent
 from mitmproxy.net.http import Headers
+from urllib.parse import urlparse, urljoin
+from syncasync import async_to_sync
 from doubletap.aws import AWSProxies
-from doubletap.utils import USER_AGENTS, gen_random_ip, beautify_json
+from doubletap.utils import USER_AGENTS, get_aws_credentials, gen_random_ip
 
 REGIONS = [
 	"us-east-1","us-west-1","us-east-2",
@@ -18,9 +20,32 @@ class DoubleTap:
     def __init__(self):
         self.proxies = AWSProxies(regions=REGIONS)
 
-    def load(self, entry):
-        ctx.log.info("Starting DOUBLETAP, please wait...")
-        asyncio.create_task(self.proxies.setup())
+    def load(self, loader):
+        loader.add_option(
+            name = "cleanup",
+            typespec = bool,
+            default = False,
+            help = "Delete all staged proxies before starting",
+        )
+
+        loader.add_option(
+            name = "proxy_method",
+            typespec = str,
+            default = "random",
+            help = "Proxy method to use",
+        )
+
+    def configure(self, updates):
+        if not all(get_aws_credentials()):
+            ctx.log.error("AWS credentials not found, exiting.")
+            sys.exit(1)
+
+        if ctx.options.cleanup:
+            cleanup = async_to_sync(self.proxies.cleanup)
+            cleanup()
+
+        setup = async_to_sync(self.proxies.setup)
+        setup()
 
     async def redirect(self, flow, proxy_urls):
         proxy_url = random.choice(proxy_urls)

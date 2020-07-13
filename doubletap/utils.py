@@ -2,6 +2,10 @@ import string
 import random
 import json
 import logging
+import os
+import pathlib
+from configparser import ConfigParser
+from functools import lru_cache
 from faker import Faker
 from faker.providers import internet
 
@@ -9,6 +13,30 @@ log = logging.getLogger("doubletap.utils")
 
 fake = Faker()
 fake.add_provider(internet)
+
+@lru_cache
+def get_aws_credentials():
+    log.debug("Checking for AWS credentials in environment variables")
+    aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+    aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+
+    if not aws_access_key or not aws_secret_key:
+        aws_credentials_path = pathlib.Path('~/.aws/credentials').expanduser()
+        if aws_credentials_path.exists():
+            log.debug("Checking for AWS credentials in ~/.aws/credentials")
+
+            aws_credentials_file = ConfigParser()
+            aws_credentials_file.read(
+                aws_credentials_path
+            )
+
+            if not aws_access_key:
+                aws_access_key = aws_credentials_file.get('default', 'aws_access_key_id')
+
+            if not aws_secret_key:
+                aws_secret_key = aws_credentials_file.get('default', 'aws_secret_access_key')
+
+    return aws_access_key, aws_secret_key
 
 def gen_random_ip():
     return fake.ipv4_public()

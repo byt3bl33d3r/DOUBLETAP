@@ -12,6 +12,7 @@ mitmproxy = "^5.1.1"
 aiobotocore = {extras = ["awscli"], version = "^1.0.7"}
 faker = "^4.1.1"
 httpx = "^0.13.3"
+syncasync = "^20180812"
 
 [tool.poetry.dev-dependencies]
 pytest-asyncio = "^0.14.0"

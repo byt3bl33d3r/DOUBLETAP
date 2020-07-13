@@ -69,7 +69,7 @@ When it comes to rotating IPs, there are a lot of ways of doing the same thing. 
 
 - Does not work against other services hosted on AWS API Gateway
 
-- It can take up to ~30 seconds to receive back a response when issuing a request to a new domain/URL. Subsequent requests to the same domain/URL will normal response times (see the [limitations](#limitations) section for more details)
+- It can take up to ~30 seconds to receive back a response when issuing a request to a new domain/URL. Subsequent requests to the same domain/URL will have normal response times (see the [limitations](#limitations) section for more details)
 
 ## How Does it Work?
 
@@ -154,7 +154,7 @@ pip3 install -r requirements.txt
 
 ## Usage
 
-DOUBLETAP needs AWS credentials in order to interact with AWS API Gateway. By default it'll look for the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables containing the AWS access key and AWS secret key respectively. If it doesn't find those environment variables, it'll try to grab access and secret key from the `~/.aws/credentials` file which is setup when you install the [AWS CLI utility](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html).
+DOUBLETAP needs AWS credentials in order to interact with AWS API Gateway. By default it'll look for the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables containing the AWS access key and AWS secret key respectively. If it doesn't find those environment variables, it'll try to grab the access and secret key from the `~/.aws/credentials` file which is setup when you install the [AWS CLI utility](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html).
 
 The proxy will bind on all interfaces on port `8080` by default.
 
@@ -167,7 +167,7 @@ docker run -p 8080:8080 -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY -e AWS_SECRET_ACCES
 ### Starting the Proxy Using mitmproxy
 
 ```console
-mitmdump -v --no-http2 -k -s doubletap.py
+mitmdump --no-http2 -k -s doubletap.py
 ```
 
 ### Sending Requests through the Proxy
@@ -197,5 +197,5 @@ If you run one of the above commands, you should see a new IP in the response on
 - Allow customization of how DOUBLETAP chooses the API Gateway proxy URL (e.g. Round-Robin as supposed to at random)
 - Allow customization of User-Agent replacement.
 - Allow customization of how the bogus IP in the `X-Forwarded-For` header is generated
-- Expose a "cleanup" command to remove stages from API Gateway
+- ~~Expose a "cleanup" command to remove stages from API Gateway~~
 - Better logging

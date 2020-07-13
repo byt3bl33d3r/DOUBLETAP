@@ -1,15 +1,11 @@
-import os
 import asyncio
 import logging
 import aiobotocore
 import httpx
-import random
-import pathlib
 import json
 from contextlib import AsyncExitStack
-from configparser import ConfigParser
 from botocore.exceptions import ClientError
-from doubletap.utils import gen_random_ip, gen_random_string, beautify_json
+from doubletap.utils import get_aws_credentials, gen_random_string, beautify_json
 
 log = logging.getLogger("doubletap.aws")
 
@@ -29,39 +25,18 @@ def apiresponse(func):
 
 class AWSApiGateway:
     def __init__(self, name, region='us-east-2'):
-        self.id = None
         self.name = name
         self.region = region
-        self._exit_stack = AsyncExitStack()
-        self.client = None
         self.log = logging.getLogger(f"doubletap.aws.apigateway.{region}")
 
-        self.aws_access_key, self.aws_secret_key = self.get_credentials()
+        self.id = None
+        self.client = None
+        self.aws_access_key = None
+        self.aws_secret_key = None
 
+        self.aws_access_key, self.aws_secret_key = get_aws_credentials()
+        self._exit_stack = AsyncExitStack()
         #self.region = boto3.session.Session().region_name
-
-    def get_credentials(self):
-        self.log.debug("Checking for AWS credentials in environment variables")
-        aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
-        aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-
-        if not aws_access_key or not aws_secret_key:
-            aws_credentials_path = pathlib.Path('~/.aws/credentials').expanduser()
-            if aws_credentials_path.exists():
-                self.log.debug("Checking for AWS credentials in ~/.aws/credentials")
-
-                aws_credentials_file = ConfigParser()
-                aws_credentials_file.read(
-                    aws_credentials_path
-                )
-
-                if not aws_access_key:
-                    aws_access_key = aws_credentials_file.get('default', 'aws_access_key_id')
-
-                if not aws_secret_key:
-                    aws_secret_key = aws_credentials_file.get('default', 'aws_secret_access_key')
-
-        return aws_access_key, aws_secret_key
 
     async def get_id(self):
         if not self.id:
@@ -245,12 +220,12 @@ class AWSApiGatewayProxy:
             except ClientError as e:
                 self.log.error(f"botocore.exceptions.ClientError: {e}")
                 if 'ConflictException' in e.args[0]:
-                    self.log.warning("resource conflict detected, attempting overwrite")
+                    self.log.warning("Resource conflict detected, attempting overwrite")
                     await self.delete(endpoint)
                     return await self.create(url, endpoint)
-                self.log.error(f"unhandled botocore.exceptions.ClientError: {e}")
+                self.log.error(f"Unhandled botocore.exceptions.ClientError: {e}")
             else:
-                self.log.debug(f"attempting to create proxy to {url} => endpoint: {endpoint}")
+                self.log.debug(f"Attempting to create proxy to {url} => endpoint: {endpoint}")
 
                 # you don't even want to know how long it took me to figure out that you need to pass "method.request.path.proxy" to put_method first
                 # *before* calling put_integration with that value in the request_params. where dafuq are the docs on this???
@@ -330,13 +305,12 @@ class AWSApiGatewayProxy:
                 return proxy_url
 
     async def stage(self):
-        self.log.debug("staging API")
+        self.log.debug("Staging and deploying API")
         async with self.apigw as apigw_client:
             await apigw_client.create_deployment(self.name)
             #apigw_client.create_stage(deployment_id, self.name)
 
     async def get(self):
-        self.log.debug("retrieving available proxies")
         async with self.apigw as apigw_client:
             await apigw_client.get_id()
 
@@ -349,7 +323,7 @@ class AWSApiGatewayProxy:
                 self.proxies[url] = f"https://{self.apigw.id}.execute-api.{self.apigw.region}.amazonaws.com/{self.name}/{resource['pathPart']}/"
 
             if self.proxies:
-                self.log.debug(f"retrieved already staged proxies: {beautify_json(self.proxies)}")
+                self.log.debug(f"Retrieved already staged proxies: {beautify_json(self.proxies)}")
 
             return self.proxies
 
@@ -372,36 +346,57 @@ class AWSApiGatewayProxy:
     def __getitem__(self, value):
         return self.proxies.get(value)
 
+    def __iter__(self):
+        for k,v in self.proxies.items():
+            yield k,v
+
 class AWSProxies:
     def __init__(self, regions, name="DOUBLETAP"):
         self.name = name
         self.regions = regions
         self.proxies = [AWSApiGatewayProxy(name, region=region) for region in regions]
         self._httpx_client = httpx.AsyncClient(verify=False)
+        self._creation_events = {}
+
+    async def is_proxy_available_for_url(self, url):
+        return all(
+            filter(lambda p: p[url], self.proxies)
+        )
 
     async def setup(self):
-        return await asyncio.gather(*[proxy.get() for proxy in self.proxies])
+        log.debug("Retrieving already staged proxies, please wait...")
+        await asyncio.gather(*[proxy.get() for proxy in self.proxies])
+        for proxy in self.proxies:
+            for url, _ in proxy:
+                self._creation_events[url] = asyncio.Event()
+                self._creation_events[url].set()
 
     async def cleanup(self):
-        log.debug("cleaning up")
+        log.debug("Unstaging and destroying DOUBLETAP proxies, please wait...")
         await asyncio.gather(*[proxy.unstage() for proxy in self.proxies])
         await asyncio.gather(*[proxy.destroy() for proxy in self.proxies])
- 
+
     async def create(self, url):
+        if url not in self._creation_events:
+            self._creation_events[url] = asyncio.Event()
+        else:
+            await self._creation_events[url].wait()
+
         proxy_urls = [proxy[url] for proxy in self.proxies]
         if all(proxy_urls):
             return proxy_urls
 
-        log.debug(f"creating proxy endpoints for {url}")
-
+        log.debug(f"Creating proxy endpoints for {url}")
         proxy_urls = await asyncio.gather(*[proxy.create(url, gen_random_string()) for proxy in self.proxies])
         await asyncio.gather(*[proxy.stage() for proxy in self.proxies])
         await asyncio.gather(*[self.check_if_staged(url) for url in proxy_urls])
 
+        self._creation_events[url].set()
+
         return proxy_urls
 
     async def check_if_staged(self, url):
-        log.debug(f"checking if API has staged ({url})")
+        log.debug(f"Checking if API has staged ({url})")
         while True:
             r = await self._httpx_client.get(url)
             if r.status_code != 403 and not r.headers.get("x-amzn-ErrorType"):
@@ -419,7 +414,3 @@ class AWSProxies:
             except IndexError:
                 log.debug("API seems to have staged, reason: returned JSON doesn't have 'message' key")
                 return True
-
-    async def get(self, url):
-        proxy = random.choice(self.proxies)
-        return proxy[url]
