@@ -22,4 +22,4 @@ COPY . .
 
 EXPOSE  8080
 
-CMD ["mitmdump", "--no-http2", "-k", "-s", "doubletap.py"]
+ENTRYPOINT ["mitmdump", "--no-http2", "-k", "-s", "doubletap.py"]
