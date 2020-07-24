@@ -1,7 +1,9 @@
+import re
+import sys
 import asyncio
 import random
 import logging
-import sys
+import pathlib
 from mitmproxy import ctx
 from mitmproxy.script import concurrent
 from mitmproxy.net.http import Headers
@@ -27,6 +29,7 @@ REGIONS = [
 class DoubleTap:
     def __init__(self):
         self.proxies = AWSProxies(regions=REGIONS)
+        self.allowed_regexes = []
 
     def load(self, loader):
         loader.add_option(
@@ -43,6 +46,13 @@ class DoubleTap:
             help="Proxy method to use",
         )
 
+        loader.add_option(
+            name="allowlist",
+            typespec=str,
+            default="",
+            help="Regex of domains/URLs that'll allowed to be proxied",
+        )
+
     def configure(self, updates):
         if not all(get_aws_credentials()):
             ctx.log.error("AWS credentials not found, exiting.")
@@ -51,6 +61,18 @@ class DoubleTap:
         if ctx.options.cleanup:
             cleanup = async_to_sync(self.proxies.cleanup)
             cleanup()
+
+        if ctx.options.allowlist:
+            allow_list_file = pathlib.Path(ctx.options.allowlist)
+
+            if allow_list_file.exists():
+                ctx.log.info("Reading regexes from file...")
+                with open(allow_list_file) as allow_file:
+                    for rx in allow_file:
+                        self.allowed_regexes.append(re.compile(rf"{rx.strip()}"))
+            else:
+                for rx in ctx.options.allowlist.split(","):
+                    self.allowed_regexes.append(re.compile(rf"{rx.strip()}"))
 
         setup = async_to_sync(self.proxies.setup)
         setup()
@@ -77,7 +99,14 @@ class DoubleTap:
         await self.redirect(flow, proxy_urls)
 
     def request(self, flow):
-        ctx.log.info(f"Processing URL: {flow.request.url}")
+        if self.allowed_regexes:
+            for rx in self.allowed_regexes:
+                if rx.findall(f"{flow.request.scheme}://{flow.request.host}/"):
+                    break
+            else:
+                return flow
+
+        ctx.log.debug(f"Processing URL: {flow.request.url}")
         flow.intercept()
         asyncio.create_task(self.proxy_request(flow))
 

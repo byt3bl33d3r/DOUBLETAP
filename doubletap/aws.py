@@ -425,6 +425,9 @@ class AWSProxies:
 
         return proxy_urls
 
+    async def bulk_create(self, urls):
+        await asyncio.gather(*[self.create(url) for url in urls])
+
     async def check_if_staged(self, url):
         log.debug(f"Checking if API has staged ({url})")
         while True:
