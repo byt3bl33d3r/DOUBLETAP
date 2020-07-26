@@ -70,7 +70,7 @@ When it comes to rotating IPs, there are a lot of ways of doing the same thing. 
 
 - You can only proxy HTTP, HTTP/2 and Websocket traffic. Not arbitrary TCP (currently DOUBLETAP only supports HTTP due to some mitmproxy limitations)
 
-- Can be somewhat easily detected by looking for a specific header that cannot be removed (see the [Defense & Detection](#defense-&-detection) section for more details)
+- Can be somewhat easily detected by looking for a specific header that cannot be removed (see the [Defense & Detection](#defense--detection) section for more details)
 
 - Does not work against other services hosted on AWS API Gateway
 
@@ -260,10 +260,10 @@ docker run -p 8080:8080 --env-file .env --rm -it $IMAGE_ID --set allowlist='.*co
 In another terminal window, start WitnessMe and give it the `HTTP_PROXY` environment variable pointing to DOUBLETAP:
 
 ```console
-HTTP_PROXY=http://127.0.0.1:8080 witnessme screenshot /my_contoso_subdomains.txt
+HTTP_PROXY=http://127.0.0.1:8080 witnessme --timeout 40 screenshot /my_contoso_subdomains.txt
 ```
 
-The above command will force WitnessMe to proxy all traffic through DOUBLETAP.
+The above command will force WitnessMe to proxy all traffic through DOUBLETAP and sets the timeout to 40 seconds so the connection doesn't time out before the proxy is setup in AWS.
 
 #### SprayingToolkit
 
