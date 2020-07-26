@@ -3,6 +3,7 @@ import random
 import json
 import logging
 import os
+import sys
 import pathlib
 from configparser import ConfigParser
 from functools import lru_cache
@@ -40,6 +41,32 @@ def get_aws_credentials():
                 )
 
     return aws_access_key, aws_secret_key
+
+
+def get_entries(string):
+    file_path = pathlib.Path(string)
+    if not file_path.exists():
+        if (
+            string.startswith("~")
+            or string.startswith("/")
+            or string.startswith(":\\\\")
+            or string.startswith("./")
+        ):
+            answer = input(
+                "It looks like you specified a file but it doesn't seem to exist, continue? [y/N]: "
+            )
+            if answer.lower() in ["n", "no", ""]:
+                sys.exit(1)
+
+        inputs = string.split(",")
+        for entry in inputs:
+            yield entry.strip()
+
+    elif file_path.exists():
+        log.debug("Loading entries from file...")
+        with open(file_path) as _file:
+            for line in _file:
+                yield line.strip()
 
 
 def gen_random_ip():

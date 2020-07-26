@@ -28,9 +28,13 @@ An asynchronous proxy to proxy HTTP traffic through [AWS API Gateway](https://aw
     + [Docker](#docker)
     + [Source](#source)
   * [Usage](#usage)
-    + [Starting the Proxy Using the Docker Image](#starting-the-proxy-using-the-docker-image)
-    + [Starting the Proxy Using mitmproxy](#starting-the-proxy-using-mitmproxy)
+    + [Using the Docker Image](#using-the-docker-image)
+    + [Using mitmproxy](#using-mitmproxy)
+    + [Proxy Options & Customization](#proxy-options--customization)
     + [Sending Requests through the Proxy](#sending-requests-through-the-proxy)
+    + [Combining DOUBLETAP with Other Tools](#combining-doubletap-with-other-tools)
+      * [WitnessMe](#witnessme)
+      * [SprayingToolkit](#sprayingtoolkit)
   * [To Do](#to-do)
 
 ## What is this?
@@ -101,7 +105,7 @@ Practically speaking, this means an HTTP request to a new domain/URL will just s
 
 As far as I'm aware, there really isn't a way around this. Additionally, AWS doesn't provide a reliable way to determine whether an API Gateway endpoint has finished staging or not. DOUBLETAP handles this by spinning up background AsyncIO tasks that perform an HTTP request to the endpoint URLs and do a [signature check](https://github.com/Porchetta-Industries/DOUBLETAP/blob/master/doubletap/aws.py#L403-L421) on the response looking for specific status codes and data that I've found through testing mean the API is still staging.
 
-To help alleviate this limitation, I'll be implementing "domain pre-loads" and "domain allow/deny" lists/regexes. This should help *a lot* when proxying headless browsers through DOUBLETAP for example.
+To help alleviate this limitation, see the section on the `prestage` and `allowlist` options below: these help *a lot* when proxying headless browsers through DOUBLETAP for example.
 
 Additionally:
 
@@ -112,7 +116,7 @@ Additionally:
 
 1. The new SprayingToolkit update is built to support proxying everything through DOUBLETAP. No more IP blacklisting on password sprays 😈
 2. ENTROPICFORESIGHT is built to support proxying everything through DOUBLETAP. No more API keys and/or rate limiting when trying to scrape OSINT data 😈
-2. Scraping with Headless Browsers, this will work a lot better once I implement the "domain pre-loads" and the domain allow/deny lists.
+2. Scraping with Headless Browsers (Note: You're going to want to use the `allowlist` and/or the `prestage` options if you do this. See [this](proxy-options--customization) section.)
 3. Anything that can benefit from a new IP on each request 😈 make the possibilities flow through you.
 
 ## OPSEC Considerations, Detection & Defense
@@ -159,17 +163,65 @@ DOUBLETAP needs AWS credentials in order to interact with AWS API Gateway. By de
 
 The proxy will bind on all interfaces on port `8080` by default.
 
-### Starting the Proxy Using the Docker Image
+### Using the Docker Image
 
 ```console
 docker run -p 8080:8080 -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY --rm -it $IMAGE_ID
 ```
 
-### Starting the Proxy Using mitmproxy
+Optionally you can put the environment variables in a `.env` file and use that:
+
+```console
+# Print out the .env file
+$ cat .env
+AWS_ACCESS_KEY_ID=<my_aws_access_key_id>
+AWS_SECRET_ACCESS_KEY=<my_aws_secret_access_key>
+
+# Run DOUBLETAP and pass it the .env file
+$ docker run -p 8080:8080 --env-file .env --rm -it $IMAGE_ID
+```
+
+### Using mitmproxy
+
+You can also start DOUBLETAP directly using the `mitmdump` utility which comes with the `mitmproxy` Python package. This is useful if you want to avoid using the docker image.
 
 ```console
 mitmdump --no-http2 -k -s doubletap.py
 ```
+
+### Proxy Options & Customization
+
+There are a few options you can pass to DOUBLETAP in order to customize the proxying behavior, prestage proxies and/or allow only certain domains/URLs to be proxied. To pass option(s) to the proxy you have to use the `--set` flat followed by `option=value`. (This is just how [mitmproxy addons work](https://docs.mitmproxy.org/stable/addons-options/#simple-example))
+
+Examples:
+
+```console
+# Using mitmdump directly
+$ mitmdump --no-http2 -k -s doubletap.py --set allowlist='.*slashdot.org,.*google.com' --set cleanup=true --set prestage='https://www.slashdot.org'
+
+# Using the docker image
+$ docker run -p 8080:8080 --env-file .env --rm -it $IMAGE_ID --set allowlist='.*slashdot.org' --set cleanup=true --set prestage=~/urls.txt
+```
+
+#### allowlist
+
+The `allowlist` option accepts a file containing regexes (one per line) or a comma separated list of regex(s). If this option is given, DOUBLETAP will only proxy requests **if** the root URL or domain matches one of the regexes.
+
+This is extremely useful when proxying headless browsers through DOUBLETAP as webpages tend to load a bunch of resources from third-party domains. Because of the [~30 seconds you have to wait for each new URL/domain](#limitations), it would take forever to load a webpage through a headless browser without this option.
+
+#### cleanup
+
+As you might think, the `cleanup` option will destroy all existing proxies in AWS so you have a "clean slate" to start with.
+
+Only accepts `true`, defaults to `false`.
+
+**Note: it can take up to a minute for the resource to get destroyed on AWS's side. Unfortunately there's no way of checking this from DOUBLETAP.**
+
+#### prestage
+
+The `prestage` option accepts a file of root URLs (one per line) or a comma separated list of root URLs that will be "prestaged" before the proxy starts up.
+
+Practically speaking, prestaging URLs sets up the proxies in AWS before hand so you don't have to wait those [~30 seconds](#limitations) when you start proxying traffic.
 
 ### Sending Requests through the Proxy
 
@@ -191,12 +243,39 @@ http --verify no -v --proxy http://127.0.0.1:8080 https://ifconfig.me/all
 
 If you run one of the above commands, you should see a new IP in the response on each request 🔥😈
 
+### Combining DOUBLETAP with Other Tools
+
+#### WitnessMe
+
+As of v1.5.0, WitnessMe supports proxies. You can combine WitnessMe with DOUBLETAP to screenshot webpages while rotating IPs! Super useful to assess attack surfaces on Red Teams.
+
+In the following example our target is `contoso.com`. We've done some OSINT already and gathered a list of subdomains that we want to screenshot.
+
+In one terminal window start DOUBLETAP:
+
+```console
+docker run -p 8080:8080 --env-file .env --rm -it $IMAGE_ID --set allowlist='.*contoso.com'
+```
+
+In another terminal window, start WitnessMe and give it the `HTTP_PROXY` environment variable pointing to DOUBLETAP:
+
+```console
+HTTP_PROXY=http://127.0.0.1:8080 witnessme screenshot /my_contoso_subdomains.txt
+```
+
+The above command will force WitnessMe to proxy all traffic to DOUBLETAP.
+
+#### SprayingToolkit
+
+To Do
+
+
 # To Do
 
-- Implement "domain/URL pre-loads"
-- Implement "domain/URL allow/deny" support with regexes
+- ~~Implement "domain/URL pre-loads"~~
+- ~~Implement "domain/URL allow/deny" support with regexes~~
 - Allow customization of how DOUBLETAP chooses the API Gateway proxy URL (e.g. Round-Robin as supposed to at random)
 - Allow customization of User-Agent replacement.
 - Allow customization of how the bogus IP in the `X-Forwarded-For` header is generated
 - ~~Expose a "cleanup" command to remove stages from API Gateway~~
-- Better logging
+- ~~Better logging~~

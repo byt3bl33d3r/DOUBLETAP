@@ -10,7 +10,7 @@ from mitmproxy.net.http import Headers
 from urllib.parse import urlparse, urljoin
 from syncasync import async_to_sync
 from doubletap.aws import AWSProxies
-from doubletap.utils import USER_AGENTS, get_aws_credentials, gen_random_ip
+from doubletap.utils import USER_AGENTS, get_aws_credentials, gen_random_ip, get_entries
 
 REGIONS = [
     "us-east-1",
@@ -53,6 +53,13 @@ class DoubleTap:
             help="Regex of domains/URLs that'll allowed to be proxied",
         )
 
+        loader.add_option(
+            name="prestage",
+            typespec=str,
+            default="",
+            help="URLs to prestage before starting the proxy",
+        )
+
     def configure(self, updates):
         if not all(get_aws_credentials()):
             ctx.log.error("AWS credentials not found, exiting.")
@@ -63,19 +70,20 @@ class DoubleTap:
             cleanup()
 
         if ctx.options.allowlist:
-            allow_list_file = pathlib.Path(ctx.options.allowlist)
+            for rx in get_entries(ctx.options.allowlist):
+                try:
+                    self.allowed_regexes.append(re.compile(rf"{rx}"))
+                except re.error as e:
+                    ctx.log.error(f"Regex '{rx}' failed to compile: {e}")
 
-            if allow_list_file.exists():
-                ctx.log.info("Reading regexes from file...")
-                with open(allow_list_file) as allow_file:
-                    for rx in allow_file:
-                        self.allowed_regexes.append(re.compile(rf"{rx.strip()}"))
-            else:
-                for rx in ctx.options.allowlist.split(","):
-                    self.allowed_regexes.append(re.compile(rf"{rx.strip()}"))
+            ctx.log.info(f"Loaded {len(self.allowed_regexes)} allowlist entry(ies)")
 
         setup = async_to_sync(self.proxies.setup)
         setup()
+
+        if ctx.options.prestage:
+            bulk_create = async_to_sync(self.proxies.bulk_create)
+            bulk_create(get_entries(ctx.options.prestage))
 
     async def redirect(self, flow, proxy_urls):
         proxy_url = random.choice(proxy_urls)
