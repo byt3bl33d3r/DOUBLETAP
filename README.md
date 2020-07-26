@@ -105,7 +105,7 @@ Practically speaking, this means an HTTP request to a new domain/URL will just s
 
 As far as I'm aware, there really isn't a way around this. Additionally, AWS doesn't provide a reliable way to determine whether an API Gateway endpoint has finished staging or not. DOUBLETAP handles this by spinning up background AsyncIO tasks that perform an HTTP request to the endpoint URLs and do a [signature check](https://github.com/Porchetta-Industries/DOUBLETAP/blob/master/doubletap/aws.py#L403-L421) on the response looking for specific status codes and data that I've found through testing mean the API is still staging.
 
-To help alleviate this limitation, see the section on the `prestage` and `allowlist` options below: these help *a lot* when proxying headless browsers through DOUBLETAP for example.
+To help alleviate this limitation, see the [section](#proxy-options--customization) on the `prestage` and `allowlist` options.
 
 Additionally:
 
@@ -191,7 +191,7 @@ mitmdump --no-http2 -k -s doubletap.py
 
 ### Proxy Options & Customization
 
-There are a few options you can pass to DOUBLETAP in order to customize the proxying behavior, prestage proxies and/or allow only certain domains/URLs to be proxied. To pass option(s) to the proxy you have to use the `--set` flat followed by `option=value`. (This is just how [mitmproxy addons work](https://docs.mitmproxy.org/stable/addons-options/#simple-example))
+There are a few options you can pass to DOUBLETAP in order to customize the proxying behavior, prestage proxies and/or allow only certain domains/URLs to be proxied. To pass option(s) to the proxy you have to use the `--set` flag followed by `option=value`. (This is just how [mitmproxy addons work](https://docs.mitmproxy.org/stable/addons-options/#simple-example))
 
 Examples:
 
@@ -221,7 +221,7 @@ Only accepts `true`, defaults to `false`.
 
 The `prestage` option accepts a file of root URLs (one per line) or a comma separated list of root URLs that will be "prestaged" before the proxy starts up.
 
-Practically speaking, prestaging URLs sets up the proxies in AWS before hand so you don't have to wait those [~30 seconds](#limitations) when you start proxying traffic.
+Practically speaking, prestaging URLs sets up the proxies in AWS before hand so you don't have to wait those [~30 seconds](#limitations) before getting back a response when you start proxying traffic.
 
 ### Sending Requests through the Proxy
 
@@ -263,7 +263,7 @@ In another terminal window, start WitnessMe and give it the `HTTP_PROXY` environ
 HTTP_PROXY=http://127.0.0.1:8080 witnessme screenshot /my_contoso_subdomains.txt
 ```
 
-The above command will force WitnessMe to proxy all traffic to DOUBLETAP.
+The above command will force WitnessMe to proxy all traffic through DOUBLETAP.
 
 #### SprayingToolkit
 
