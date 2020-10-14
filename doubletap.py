@@ -10,7 +10,7 @@ from mitmproxy.net.http import Headers
 from urllib.parse import urlparse, urljoin
 from syncasync import async_to_sync
 from doubletap.aws import AWSProxies
-from doubletap.utils import USER_AGENTS, get_aws_credentials, gen_random_ip, get_entries
+from doubletap.utils import USER_AGENTS, get_aws_credentials, gen_random_ip, get_entries, gen_urls_from_entries
 
 REGIONS = [
     "us-east-1",
@@ -83,7 +83,11 @@ class DoubleTap:
 
         if ctx.options.prestage:
             bulk_create = async_to_sync(self.proxies.bulk_create)
-            bulk_create(get_entries(ctx.options.prestage))
+            bulk_create(
+                gen_urls_from_entries(
+                    get_entries(ctx.options.prestage)
+                )
+            )
 
     async def redirect(self, flow, proxy_urls):
         proxy_url = random.choice(proxy_urls)

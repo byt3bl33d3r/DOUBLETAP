@@ -68,6 +68,11 @@ def get_entries(string):
             for line in _file:
                 yield line.strip()
 
+def gen_urls_from_entries(inputs):
+    for host in inputs:
+        if not host.startswith("https://") and not host.startswith("http://"):
+            for scheme in ["https", "http"]:
+                yield f"{scheme}://{host}/"
 
 def gen_random_ip():
     return fake.ipv4_public()

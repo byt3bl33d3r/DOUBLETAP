@@ -385,7 +385,7 @@ class AWSProxies:
         self.name = name
         self.regions = regions
         self.proxies = [AWSApiGatewayProxy(name, region=region) for region in regions]
-        self._httpx_client = httpx.AsyncClient(verify=False)
+        self._httpx_client = httpx.AsyncClient(verify=False, http2=True)
         self._creation_events = {}
 
     async def is_proxy_available_for_url(self, url):
@@ -418,7 +418,8 @@ class AWSProxies:
         proxy_urls = await asyncio.gather(
             *[proxy.create(url, gen_random_string()) for proxy in self.proxies]
         )
-        await asyncio.gather(*[proxy.stage() for proxy in self.proxies])
+
+        await asyncio.wait([proxy.stage() for proxy in self.proxies], timeout=10)
         await asyncio.gather(*[self.check_if_staged(url) for url in proxy_urls])
 
         self._creation_events[url].set()
